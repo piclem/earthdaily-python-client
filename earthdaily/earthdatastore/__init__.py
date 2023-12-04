@@ -30,8 +30,8 @@ def post_query_items(items, query):
 
     Returns
     -------
-    items : list
-        List of items
+    items : ItemCollection
+        filtered items
     """
     items_ = []
     for idx, item in enumerate(items):
@@ -226,7 +226,8 @@ class StacCollectionExplorer:
 
     Returns
     -------
-    None."""
+    None
+    """
 
     def __init__(self, client, collection):
         self.client = client
@@ -468,21 +469,61 @@ class Auth:
         collections: str | list,
         datetime=None,
         assets: None | list | dict = None,
-        intersects: (gpd.GeoDataFrame, str, dict) = None,
+        intersects: (gpd.GeoDataFrame | str | dict) = None,
         bbox=None,
-        mask_with: (None, str) = None,
+        mask_with: (None | str) = None,
         mask_statistics: bool | int = False,
-        clear_cover: (int, float) = None,
-        prefer_alternate: (str, False) = "download",
+        clear_cover: (int | float) = None,
+        prefer_alternate: (str | bool) = "download",
         search_kwargs: dict = {},
         add_default_scale_factor: bool = True,
         common_band_names=True,
         preload_mask=True,
         **kwargs,
     ) -> xr.Dataset:
-        """Create a `xarray.Dataset` datacube.
+        """
+        Create a `xarray.Dataset` datacube.
 
-        This method is the high-level entrypoint to the package main features. In the background, 
+        Parameters
+        ----------
+        collections : str or list
+            The collection(s) to search.
+        datetime : str or list or tuple or datetime or list[datetime], optional
+            Either a single date, a date range, a list of dates, or a list of date ranges. Defaults to None.
+        assets : list or dict, optional
+            The assets to load. Defaults to None.
+        intersects : gpd.GeoDataFrame or str or dict, optional
+            A GeoDataFrame, a WKT string, or a GeoJSON dict.
+            The geometry to search for items within. Defaults to None.
+        bbox : list or tuple, optional
+            A bounding box. Defaults to None.
+        mask_with : str, optional
+            The mask to use. Defaults to None.
+        mask_statistics : bool or int, optional
+            Whether to mask with statistics. Defaults to False.
+        clear_cover : int or float, optional
+            The minimum clear cover percentage. Defaults to None.
+        prefer_alternate : str or False, optional
+            Whether to prefer alternate assets. Defaults to "download".
+        search_kwargs : dict, optional
+            The search kwargs. Defaults to {}.
+        add_default_scale_factor : bool, optional
+            Whether to add default scale factor. Defaults to True.
+        common_band_names : bool, optional
+            Whether to use common band names. Defaults to True. 
+        preload_mask : bool, optional
+            Whether to preload the mask. Defaults to True.
+        **kwargs
+            Additional keyword arguments to pass to `datacube.Datacube.load`.
+
+        Returns
+        -------
+        xr.Dataset
+            The datacube.
+            
+        Notes
+        -----
+        This method is the high-level entry point to the package main features. In the background, 
         it performs the following main steps:
 
         - Search query pre-processing and enhancement
@@ -490,28 +531,6 @@ class Auth:
         - ItemCollection post-processing en enrichment
         - Load the items into a `xarray.Dataset` using various backends (odc-stac, stackstac)
         - Mask the dataset with a cloud mask
-
-        Args:
-            collections (str | list): The collection(s) to search.
-            datetime (str | list | tuple | datetime | list[datetime], optional):
-                Either a single date, a date range, a list of dates, or a list of date ranges.
-                Defaults to None.
-            assets (list | dict, optional): The assets to load. Defaults to None.
-            intersects (gpd.GeoDataFrame, str, dict, optional): A GeoDataFrame, a WKT string, or a GeoJSON dict.
-                The geometry to search for items within. Defaults to None.
-            bbox (list | tuple, optional): A bounding box. Defaults to None.
-            mask_with (str, optional): The mask to use. Defaults to None.
-            mask_statistics (bool | int, optional): Whether to mask with statistics. Defaults to False.
-            clear_cover (int, float, optional): The minimum clear cover percentage. Defaults to None.
-            prefer_alternate (str, False, optional): Whether to prefer alternate assets. Defaults to "download".
-            search_kwargs (dict, optional): The search kwargs. Defaults to {}.
-            add_default_scale_factor (bool, optional): Whether to add default scale factor. Defaults to True.
-            common_band_names (bool, optional): Whether to use common band names. Defaults to True. 
-            preload_mask (bool, optional): Whether to preload the mask. Defaults to True.
-            **kwargs: Additional keyword arguments to pass to `datacube.Datacube.load`.
-
-        Returns:
-            xr.Dataset: The datacube.
         """
         if mask_with and common_band_names:
             if isinstance(collections, list):
@@ -633,27 +652,27 @@ class Auth:
         **kwargs,
     ):
         """
-        search using pystac client search. Add some features to enhance experience.
+        A wrapper around the pystac client search method. Add some features to enhance experience.
 
         Parameters
         ----------
         collections : str | list
-            DESCRIPTION.
+            Collection(s) to search. It is recommended to only search one collection at a time.
         intersects : gpd.GeoDataFrame, optional
-            DESCRIPTION. The default is None.
+            If provided, the results will contain only intersecting items. The default is None.
         bbox : TYPE, optional
-            DESCRIPTION. The default is None.
+            If provided, the results will contain only intersecting items. The default is None.
         post_query : TYPE, optional
-            DESCRIPTION. The default is None.
+            STAC-like filters applied on retrieved items. The default is None.
         prefer_alternate : TYPE, optional
-            DESCRIPTION. The default is None.
+            Prefer alternate links when available. The default is None.
         **kwargs : TYPE
-            DESCRIPTION.
+            Keyword arguments passed to the pystac client search method.
 
         Returns
         -------
-        items_collection : TYPE
-            DESCRIPTION.
+        items_collection : ItemCollection
+            The filtered STAC items.
 
         Example
         -------
@@ -762,6 +781,21 @@ class Auth:
         return items_collection
 
     def ag_cloud_mask_items(self, items_collection):
+        """
+        Search the catalog for the ag_cloud_mask items matching the given items_collection.
+        The ag_cloud_mask items are searched in the `ag_cloud_mask_collection_id` collection using the
+        `ag_cloud_mask_item_id` properties of the items.
+
+        Parameters
+        ----------
+        items_collection : pystac.ItemCollection
+            The items to find corresponding ag cloud mask items for.
+
+        Returns
+        -------
+        pystac.ItemCollection
+            The filtered item collection.
+        """
         def ag_cloud_mask_from_items(items):
             products = {}
             for item in items:
@@ -789,6 +823,25 @@ def item_property_to_df(
     property_name="raster:bands",
     sub_property_name="classification:classes",
 ):
+    """
+    Extract the property from the asset of the item.
+
+    Parameters
+    ----------
+    item : pystac.Item
+        The item to extract the property from.
+    asset : str, optional
+        The asset name.
+    property_name : str, optional
+        The property name.
+    sub_property_name : str, optional
+        The sub property name.
+
+    Returns
+    -------
+    pandas.DataFrame
+        The dataframe containing the property.
+    """
     df = pd.DataFrame()
     properties = {}
 
